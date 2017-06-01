@@ -1,6 +1,9 @@
 package main
 
 import (
+	"log"
+	"os"
+	"os/signal"
 	"sync"
 
 	"github.com/byuoitav/salt-translator-service/elk"
@@ -9,16 +12,27 @@ import (
 
 func main() {
 
+	const NUM_PROCESSES = 2
+
 	events := make(chan salt.Event)
 	done := make(chan bool, 1)
+	signals := make(chan os.Signal)
 	var control sync.WaitGroup
 
-	//Listen to salt
-	salt.Listen(events, done)
-	control.Add(1)
+	signal.Notify(signals, os.Interrupt)
+	go func() {
+		log.Printf("Wating for interrupt")
+		<-signals
+		log.Printf("Nuclear launch detected. Firing interceptors...")
+		for i := 0; i < NUM_PROCESSES; i++ {
+			done <- true
+		}
+	}()
 
-	//Publish to ELK
-	elk.Publish(events, done)
-	control.Add(1)
+	go salt.Listen(events, done, &control)
+	go elk.Publish(events, done)
 
+	control.Add(NUM_PROCESSES)
+	control.Wait()
+	log.Printf("Exiting...")
 }
