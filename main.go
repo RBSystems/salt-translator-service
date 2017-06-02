@@ -30,7 +30,7 @@ func main() {
 	}()
 
 	go salt.Listen(events, done, &control)
-	go elk.Publish(events, done)
+	go elk.Publish(events, done, &control)
 
 	control.Add(NUM_PROCESSES)
 	control.Wait()

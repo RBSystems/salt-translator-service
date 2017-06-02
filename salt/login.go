@@ -38,6 +38,8 @@ var connection SaltConnection
 
 func Listen(events chan Event, done chan bool, control *sync.WaitGroup) {
 
+	log.Printf("Listening to SALT...")
+
 	var client, listener sync.Once
 
 	for {
@@ -45,10 +47,10 @@ func Listen(events chan Event, done chan bool, control *sync.WaitGroup) {
 		select {
 		case <-done:
 
-			log.Printf("Received terminate signal. Terminating process...")
+			log.Printf("Received terminate signal. Terminating SALT process...")
 			connection.Response.Body.Close()
 			control.Done()
-			break
+			return
 
 		default:
 
@@ -86,15 +88,24 @@ func listenSalt(events chan Event) {
 				if strings.Contains(line2, "data") {
 
 					jsonString := line2[5:]
-					var event Event
 
+					var event Event
 					err := json.Unmarshal([]byte(jsonString), &event)
 					if err != nil {
 						log.Fatal("Error unmarshalling event" + err.Error())
 					}
 
-					log.Printf("Writing event to channel: %v", event)
-					events <- event
+					ok, err := evaluate(event)
+					if err != nil {
+						log.Printf("Error evaluating event: %s", err.Error())
+					}
+
+					if ok {
+						log.Printf("Writing event to channel: %v", event)
+						events <- event
+					} else {
+						continue
+					}
 				}
 			} else if len(line) < 1 {
 				continue
@@ -102,6 +113,12 @@ func listenSalt(events chan Event) {
 		}
 	}
 	return
+}
+
+func evaluate(event Event) (bool, error) {
+	log.Printf("Evaluating event: %s", event.Tag)
+
+	return false, nil
 }
 
 func login() {

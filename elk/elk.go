@@ -1,6 +1,95 @@
 package elk
 
-import "github.com/byuoitav/salt-translator-service/salt"
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"sync"
 
-func Publish(events chan salt.Event, done chan bool) {
+	"github.com/byuoitav/event-router-microservice/eventinfrastructure"
+	"github.com/byuoitav/salt-translator-service/salt"
+)
+
+var DONE bool
+
+func Publish(events chan salt.Event, done chan bool, control *sync.WaitGroup) {
+
+	log.Printf("Publishing to ELK...")
+
+	var once sync.Once
+
+	for {
+		select {
+		case <-done:
+
+			log.Printf("Recieved terminate signal. Terminating ELK processes...")
+			DONE = true
+			control.Done()
+			return
+
+		default:
+			once.Do(func() { go publishElk(events) })
+		}
+
+	}
+}
+
+func publishElk(events chan salt.Event) {
+
+	address := os.Getenv("ELASTIC_API_EVENTS")
+	log.Printf("Writing events to: %s", address)
+
+	for {
+
+		select {
+		case event := <-events:
+			go send(event, address)
+		}
+	}
+}
+
+func send(event salt.Event, address string) {
+
+	if DONE {
+		return
+	}
+
+	log.Printf("Logging event: %v", event)
+
+	apiEvent, err := translate(event)
+	if err != nil {
+		log.Printf("Error translating event: %s: %s", event.Tag, err.Error())
+		return
+	}
+
+	payload, err := json.Marshal(apiEvent)
+	if err != nil {
+		log.Printf("Error marshalling event: %v: %s", apiEvent, err.Error())
+		return
+	}
+
+	response, err := http.Post(address, "application/json", bytes.NewBuffer(payload))
+	if err != nil {
+		log.Printf("Error writing event: %v: %s", apiEvent, err.Error())
+		return
+	}
+
+	value, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("Error reading response: %s", err.Error())
+	}
+
+	log.Printf("Response: %s", value)
+
+}
+
+//converts salt events to API events
+func translate(event salt.Event) (eventinfrastructure.Event, error) {
+
+	log.Printf("Translating event: %s", event.Tag)
+
+	return eventinfrastructure.Event{}, nil
 }
