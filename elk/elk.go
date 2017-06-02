@@ -9,9 +9,17 @@ import (
 	"os"
 	"sync"
 
-	"github.com/byuoitav/event-router-microservice/eventinfrastructure"
 	"github.com/byuoitav/salt-translator-service/salt"
 )
+
+type Event struct {
+	Building  string                 `json:"building"`
+	Room      string                 `json:"room"`
+	Cause     string                 `json:"cause"`
+	Hostname  string                 `json:"hostname"`
+	Timestamp string                 `json:"timestamp"`
+	Data      map[string]interface{} `json:"data"`
+}
 
 var DONE bool
 
@@ -43,7 +51,6 @@ func publishElk(events chan salt.Event) {
 	log.Printf("Writing events to: %s", address)
 
 	for {
-
 		select {
 		case event := <-events:
 			go send(event, address)
@@ -84,12 +91,4 @@ func send(event salt.Event, address string) {
 
 	log.Printf("Response: %s", value)
 
-}
-
-//converts salt events to API events
-func translate(event salt.Event) (eventinfrastructure.Event, error) {
-
-	log.Printf("Translating event: %s", event.Tag)
-
-	return eventinfrastructure.Event{}, nil
 }

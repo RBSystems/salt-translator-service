@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 )
@@ -95,7 +96,7 @@ func listenSalt(events chan Event) {
 						log.Fatal("Error unmarshalling event" + err.Error())
 					}
 
-					ok, err := evaluate(event)
+					ok, err := filter(event)
 					if err != nil {
 						log.Printf("Error evaluating event: %s", err.Error())
 					}
@@ -103,10 +104,10 @@ func listenSalt(events chan Event) {
 					if ok {
 						log.Printf("Writing event to channel: %v", event)
 						events <- event
-					} else {
-						continue
 					}
+
 				}
+
 			} else if len(line) < 1 {
 				continue
 			}
@@ -115,10 +116,16 @@ func listenSalt(events chan Event) {
 	return
 }
 
-func evaluate(event Event) (bool, error) {
+func filter(event Event) (bool, error) {
 	log.Printf("Evaluating event: %s", event.Tag)
 
-	return false, nil
+	auth := regexp.MustCompile(`\/auth`)
+	if auth.MatchString(event.Tag) {
+		log.Printf("Filtering out salt authorization event: %s", event.Tag)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func login() {
