@@ -16,6 +16,7 @@ type Event struct {
 	Building  string                 `json:"building"`
 	Room      string                 `json:"room"`
 	Cause     string                 `json:"cause"`
+	Category  string                 `json:"category"`
 	Hostname  string                 `json:"hostname"`
 	Timestamp string                 `json:"timestamp"`
 	Data      map[string]interface{} `json:"data"`
@@ -65,6 +66,7 @@ func send(event salt.Event, address string) {
 	}
 
 	log.Printf("Logging event: %v", event)
+	log.Printf("Data: %v", event.Data)
 
 	apiEvent, err := translate(event)
 	if err != nil {
