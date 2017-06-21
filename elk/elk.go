@@ -17,9 +17,9 @@ type Event struct {
 	Room      string                 `json:"room"`
 	Cause     string                 `json:"cause"`
 	Category  string                 `json:"category"`
-	Hostname  string                 `json:"hostname"`
+	Name      string                 `json:"name"`
 	Timestamp string                 `json:"timestamp"`
-	Data      map[string]interface{} `json:"data"`
+	Data      map[string]interface{} `json:"data",omitempty`
 }
 
 var DONE bool
