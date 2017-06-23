@@ -12,82 +12,94 @@ func Listen(events chan Event, done chan bool, control *sync.WaitGroup) {
 
 	log.Printf("Listening to SALT...")
 
-	var client, listener sync.Once
-
-	for {
-
-		select {
-		case <-done:
-
-			log.Printf("Received terminate signal. Terminating SALT process...")
-			connection.Response.Body.Close()
-			control.Done()
-			return
-
-		default:
-
-			client.Do(login)
-			listener.Do(func() { go listenSalt(events) })
-
-		}
+	err := login()
+	if err != nil {
+		log.Printf("Error logging into salt. Terminating...")
+		control.Done()
+		return
 	}
+
+	terminate := make(chan bool)
+	go ListenSalt(events, terminate)
+
+	<-done
+	terminate <- true
+
+	log.Printf("Received terminate signal. Terminating SALT process...")
+	connection.Response.Body.Close()
+	control.Done()
 }
 
-func listenSalt(events chan Event) {
+func ListenSalt(events chan Event, terminate chan bool) {
 
 	log.Printf("Reading salt events...")
 
 	for {
 
-		if connection.Response.Close {
-			log.Printf("Detected closed salt connection. Terminating process...")
-			break
-		}
+		select {
 
-		line, err := connection.Reader.ReadString('\n')
-		if err != nil {
-			log.Fatal("Error reading event" + err.Error())
-		} else {
-			if strings.Contains(line, "retry") {
-				continue
-			} else if strings.Contains(line, "tag") {
+		case <-terminate:
+			return
 
-				line2, err := connection.Reader.ReadString('\n')
-				if err != nil {
-					log.Fatal(err)
-				}
+		default:
 
-				if strings.Contains(line2, "data") {
+			line, err := connection.Reader.ReadString('\n')
+			if err != nil {
+				log.Printf("Error reading event %s. Terminating", err.Error())
+				break
+			} else {
+				if strings.Contains(line, "retry") {
+					continue
+				} else if strings.Contains(line, "tag") {
 
-					jsonString := line2[5:]
-
-					var event Event
-					err := json.Unmarshal([]byte(jsonString), &event)
+					line2, err := connection.Reader.ReadString('\n')
 					if err != nil {
-						log.Fatal("Error unmarshalling event" + err.Error())
+						log.Fatal(err)
 					}
 
-					ok, err := filter(event)
+					err = ReadAndWriteEvent(line2, events)
 					if err != nil {
-						log.Printf("Error evaluating event: %s", err.Error())
+						log.Printf("Error reading event: %s", err.Error())
 					}
 
-					if ok {
-						log.Printf("Writing event to channel: %v", event)
-						events <- event
-					}
-
+				} else if len(line) < 1 {
+					continue
 				}
-
-			} else if len(line) < 1 {
-				continue
 			}
 		}
 	}
+
 	return
 }
 
-func filter(event Event) (bool, error) {
+func ReadAndWriteEvent(line string, events chan Event) error {
+
+	if strings.Contains(line, "data") {
+
+		jsonString := line[5:]
+
+		var event Event
+		err := json.Unmarshal([]byte(jsonString), &event)
+		if err != nil {
+			log.Fatal("Error unmarshalling event" + err.Error())
+		}
+
+		ok, err := Filter(event)
+		if err != nil {
+			log.Printf("Error evaluating event: %s", err.Error())
+		}
+
+		if ok {
+			log.Printf("Writing event to channel: %v", event)
+			events <- event
+		}
+
+	}
+
+	return nil
+}
+
+func Filter(event Event) (bool, error) {
 	log.Printf("Evaluating event: %s", event.Tag)
 
 	auth := regexp.MustCompile(`\/auth`)

@@ -36,7 +36,7 @@ type SaltConnection struct {
 
 var connection SaltConnection
 
-func login() {
+func login() error {
 
 	log.Printf("Logging into salt master...")
 	baseUrl := os.Getenv("SALT_MASTER_ADDRESS")
@@ -46,12 +46,17 @@ func login() {
 	values["password"] = os.Getenv("SALT_EVENT_PASSWORD")
 	values["eauth"] = "pam"
 
-	body, _ := json.Marshal(values)
+	body, err := json.Marshal(values)
+	if err != nil {
+		log.Printf("Error marshalling salt login body: %s", err.Error())
+		return err
+	}
 
 	url := baseUrl + "/login"
 	request, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		log.Printf("Error making request: %s", err.Error())
+		return err
 	}
 
 	request.Header.Set("Accept", "application/json")
@@ -68,6 +73,7 @@ func login() {
 	connection.Response, err = client.Do(request)
 	if err != nil {
 		log.Printf("Error sending request: %s", err.Error())
+		return err
 	}
 
 	responseBody := make(map[string][]LoginResponse)
@@ -75,6 +81,7 @@ func login() {
 	body, err = ioutil.ReadAll(connection.Response.Body)
 	if err != nil {
 		log.Printf("Error reading response: %s", err.Error())
+		return err
 	}
 
 	err = json.Unmarshal(body, &responseBody)
@@ -90,15 +97,19 @@ func login() {
 	request, err = http.NewRequest("GET", url, nil)
 	if err != nil {
 		log.Printf("Error making request: %s", err.Error())
+		return err
 	}
 
 	request.Header.Add("X-Auth-Token", connection.Token)
 	connection.Response, err = client.Do(request)
 	if err != nil {
 		log.Printf("Error sending request: %s", err.Error())
+		return err
 	}
 
 	connection.Reader = bufio.NewReader(connection.Response.Body)
 
 	daemon.SdNotify(false, "READY=1")
+
+	return nil
 }

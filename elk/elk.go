@@ -18,7 +18,7 @@ type Event struct {
 	Cause     string                 `json:"cause"`
 	Category  string                 `json:"category"`
 	Hostname  string                 `json:"hostname"`
-	HostType  string                 `json:"HostType"`
+	HostType  string                 `json:"hosttype"`
 	Timestamp string                 `json:"timestamp"`
 	Data      map[string]interface{} `json:"data",omitempty`
 }
