@@ -17,7 +17,8 @@ type Event struct {
 	Room      string                 `json:"room"`
 	Cause     string                 `json:"cause"`
 	Category  string                 `json:"category"`
-	Name      string                 `json:"name"`
+	Hostname  string                 `json:"name"`
+	HostType  string                 `json:"HostType"`
 	Timestamp string                 `json:"timestamp"`
 	Data      map[string]interface{} `json:"data",omitempty`
 }
@@ -54,7 +55,7 @@ func publishElk(events chan salt.Event) {
 	for {
 		select {
 		case event := <-events:
-			go send(event, address)
+			send(event, address)
 		}
 	}
 }
