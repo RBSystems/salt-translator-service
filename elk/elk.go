@@ -17,7 +17,7 @@ type Event struct {
 	Room      string                 `json:"room"`
 	Cause     string                 `json:"cause"`
 	Category  string                 `json:"category"`
-	Hostname  string                 `json:"name"`
+	Hostname  string                 `json:"hostname"`
 	HostType  string                 `json:"HostType"`
 	Timestamp string                 `json:"timestamp"`
 	Data      map[string]interface{} `json:"data",omitempty`
@@ -29,22 +29,12 @@ func Publish(events chan salt.Event, done chan bool, control *sync.WaitGroup) {
 
 	log.Printf("Publishing to ELK...")
 
-	var once sync.Once
+	go waitSignal(done, control)
 
-	for {
-		select {
-		case <-done:
+	publishElk(events)
 
-			log.Printf("Recieved terminate signal. Terminating ELK processes...")
-			DONE = true
-			control.Done()
-			return
+	control.Done()
 
-		default:
-			once.Do(func() { go publishElk(events) })
-		}
-
-	}
 }
 
 func publishElk(events chan salt.Event) {
@@ -55,16 +45,24 @@ func publishElk(events chan salt.Event) {
 	for {
 		select {
 		case event := <-events:
+			if DONE {
+				return
+			}
 			send(event, address)
 		}
 	}
 }
 
-func send(event salt.Event, address string) {
+func waitSignal(done chan bool, control *sync.WaitGroup) {
 
-	if DONE {
-		return
-	}
+	log.Printf("ELK process waiting for terminate signal...")
+
+	<-done
+	log.Printf("Detected terminate signal. Terminating ELK process...")
+	DONE = true
+}
+
+func send(event salt.Event, address string) {
 
 	log.Printf("Logging event: %v", event)
 	log.Printf("Data: %v", event.Data)
