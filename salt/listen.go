@@ -107,6 +107,11 @@ func Filter(event Event) (bool, error) {
 		log.Printf("Filtering out salt authorization event: %s", event.Tag)
 		return false, nil
 	}
+	staging := regexp.MustCompile(`STAGE-STG`)
+	if staging.MatchString(event.Tag) {
+		log.Printf("Filtering out events from Pis in staging: %s", event.Tag)
+		return false, nil
+	}
 
 	return true, nil
 }
