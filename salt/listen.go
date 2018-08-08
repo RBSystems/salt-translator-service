@@ -1,52 +1,39 @@
 package salt
 
 import (
-	"encoding/json"
-	"log"
-	"regexp"
+	"time"
+
 	"strings"
-	"sync"
+
+	"github.com/byuoitav/common/log"
+	"github.com/byuoitav/common/nerr"
 )
 
-func Listen(events chan Event, done chan bool, control *sync.WaitGroup) {
+//Listen starts up and listens to salt until it is done
+func Listen(events chan string, done chan bool) {
 
-	log.Printf("Listening to SALT...")
+	log.L.Debugf("Listening to SALT...")
 
-	err := login()
-	if err != nil {
-		log.Printf("Error logging into salt. Terminating...")
-		control.Done()
-		return
-	}
+	connection := createSaltConnection(done)
 
-	terminate := make(chan bool)
-	go ListenSalt(events, terminate)
-
-	<-done
-	terminate <- true
-
-	log.Printf("Received terminate signal. Terminating SALT process...")
-	connection.Response.Body.Close()
-	control.Done()
-}
-
-func ListenSalt(events chan Event, terminate chan bool) {
-
-	log.Printf("Reading salt events...")
+	log.L.Debugf("Reading salt events...")
 
 	for {
 
 		select {
 
-		case <-terminate:
+		case <-done:
+			connection.Response.Body.Close()
+
 			return
 
 		default:
 
 			line, err := connection.Reader.ReadString('\n')
 			if err != nil {
-				log.Printf("Error reading event %s. Terminating", err.Error())
-				break
+				log.L.Debugf("Error reading event %s. Attempting to re-establish connection", err.Error())
+				connection.Response.Body.Close()
+				connection = createSaltConnection(done)
 			} else {
 				if strings.Contains(line, "retry") {
 					continue
@@ -54,12 +41,13 @@ func ListenSalt(events chan Event, terminate chan bool) {
 
 					line2, err := connection.Reader.ReadString('\n')
 					if err != nil {
-						log.Fatal(err)
+						log.L.Debugf("Error reading the next line of event: %v", err.Error())
+						continue
 					}
 
-					err = ReadAndWriteEvent(line2, events)
-					if err != nil {
-						log.Printf("Error reading event: %s", err.Error())
+					nerr := readAndWriteEvent(line2, events)
+					if nerr != nil {
+						log.L.Debugf("Error reading event: %s", nerr.Error())
 					}
 
 				} else if len(line) < 1 {
@@ -68,50 +56,65 @@ func ListenSalt(events chan Event, terminate chan bool) {
 			}
 		}
 	}
-
-	return
 }
 
-func ReadAndWriteEvent(line string, events chan Event) error {
+func createSaltConnection(done chan bool) saltConnection {
+	var connection saltConnection
+
+	//create the connection.  If it fails, then
+	//wait for 1 second and retry
+	//keep retrying after 1s, 10s, 30s, 1m, 2m, and then every 5m indefinitely
+
+	var waitTime = 1
+
+	for {
+		select {
+
+		case <-done:
+			return connection
+
+		default:
+			log.L.Debugf("Creating salt connection")
+			connection, err := login()
+
+			if err == nil {
+				return connection
+			}
+
+			log.L.Debugf("Error connecting to salt %v", err.Error())
+
+			time.Sleep(time.Duration(waitTime) * time.Second)
+
+			switch waitTime {
+			case 1:
+				waitTime = 10
+			case 10:
+				waitTime = 30
+			case 30:
+				waitTime = 60
+			case 60:
+				waitTime = 120
+			case 120:
+				waitTime = 300
+			default:
+			}
+		}
+	}
+}
+
+func readAndWriteEvent(line string, events chan string) *nerr.E {
 
 	if strings.Contains(line, "data") {
 
+		//cut off the "data:" so we just get the raw { } json value of the data field
 		jsonString := line[5:]
 
-		var event Event
-		err := json.Unmarshal([]byte(jsonString), &event)
-		if err != nil {
-			log.Fatal("Error unmarshalling event" + err.Error())
-		}
-
-		ok, err := Filter(event)
-		if err != nil {
-			log.Printf("Error evaluating event: %s", err.Error())
-		}
-
-		if ok {
-			log.Printf("Writing event to channel: %v", event)
-			events <- event
-		}
-
+		//We're not going to unmarshal here - instead we'll allow the translator
+		//to unpack the json string into the appropriate struct based on the type
+		//we're also not going to filter here, but instead allow the translator to do that
+		//for unknown even types
+		events <- jsonString
 	}
 
 	return nil
-}
-
-func Filter(event Event) (bool, error) {
-	log.Printf("Evaluating event: %s", event.Tag)
-
-	auth := regexp.MustCompile(`\/auth`)
-	if auth.MatchString(event.Tag) {
-		log.Printf("Filtering out salt authorization event: %s", event.Tag)
-		return false, nil
-	}
-	staging := regexp.MustCompile(`STAGE-STG`)
-	if staging.MatchString(event.Tag) {
-		log.Printf("Filtering out events from Pis in staging: %s", event.Tag)
-		return false, nil
-	}
-
-	return true, nil
 }

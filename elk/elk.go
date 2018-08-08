@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
-	"log"
+
 	"net/http"
 	"os"
-	"sync"
 
-	"github.com/byuoitav/salt-translator-service/salt"
+	"github.com/byuoitav/common/log"
+	"github.com/byuoitav/common/nerr"
 )
 
-type Event struct {
+type event struct {
 	Building  string                 `json:"building"`
 	Room      string                 `json:"room"`
 	Cause     string                 `json:"cause"`
@@ -23,73 +23,52 @@ type Event struct {
 	Data      map[string]interface{} `json:"data",omitempty`
 }
 
-var DONE bool
+//Publish to start the listener for salt events that will then send them to the ELK stack
+func Publish(events chan string, done chan bool) {
 
-func Publish(events chan salt.Event, done chan bool, control *sync.WaitGroup) {
-
-	log.Printf("Publishing to ELK...")
-
-	go waitSignal(done, control)
-
-	publishElk(events)
-
-	control.Done()
-
-}
-
-func publishElk(events chan salt.Event) {
+	log.L.Debugf("Publishing to ELK...")
 
 	address := os.Getenv("ELASTIC_API_EVENTS")
-	log.Printf("Writing events to: %s", address)
+	log.L.Debugf("Writing events to: %s", address)
 
 	for {
 		select {
 		case event := <-events:
-			if DONE {
-				return
-			}
 			send(event, address)
+
+		case <-done:
+			return
 		}
 	}
 }
 
-func waitSignal(done chan bool, control *sync.WaitGroup) {
+func send(event string, address string) {
 
-	log.Printf("ELK process waiting for terminate signal...")
+	log.L.Debugf("Logging event: %v", event)
 
-	<-done
-	log.Printf("Detected terminate signal. Terminating ELK process...")
-	DONE = true
-}
-
-func send(event salt.Event, address string) {
-
-	log.Printf("Logging event: %v", event)
-	log.Printf("Data: %v", event.Data)
-
-	apiEvent, err := translate(event)
-	if err != nil {
-		log.Printf("Error translating event: %s: %s", event.Tag, err.Error())
+	apiEvent, myNerr := translate(event)
+	if myNerr != nil {
+		log.L.Debugf("Error translating event: %s: %s", event, myNerr.Error())
 		return
 	}
 
 	payload, err := json.Marshal(apiEvent)
 	if err != nil {
-		log.Printf("Error marshalling event: %v: %s", apiEvent, err.Error())
+		log.L.Debugf("Error marshalling event: %v: %s", apiEvent, nerr.Translate(err).Addf("Error marshaling elk event payload to json"))
 		return
 	}
 
 	response, err := http.Post(address, "application/json", bytes.NewBuffer(payload))
 	if err != nil {
-		log.Printf("Error writing event: %v: %s", apiEvent, err.Error())
+		log.L.Debugf("Error posting event to ELK: %v: %s", apiEvent, nerr.Translate(err).Addf("Error during elk post"))
 		return
 	}
 
 	value, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		log.Printf("Error reading response: %s", err.Error())
+		log.L.Debugf("Error reading response: %s", nerr.Translate(err).Addf("Error during response body read"))
 	}
 
-	log.Printf("Response: %s", value)
+	log.L.Debugf("Response: %s", value)
 
 }
