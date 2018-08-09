@@ -151,7 +151,7 @@ type saltProcessChromiumEvent struct {
 func translateChromium(jsonString string) (ei.Event, *nerr.E) {
 
 	//log.L.Debugf("Identified salt ps/chromium event: %s", jsonString)
-	log.L.Infof("Identified salt ps/chromium event: %s", jsonString)
+	log.L.Debugf("Identified salt ps/chromium event: %s", jsonString)
 
 	//unmarshal into the event structure so we can process it
 	var event saltProcessChromiumEvent
