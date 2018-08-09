@@ -121,11 +121,11 @@ func translateBeaconStatus(jsonString string) (ei.Event, *nerr.E) {
 
 	log.L.Debugf("jsonString:[%v], event:[%v]", jsonString, event)
 
-	hostname, _ := os.Hostname()
+	//hostname, _ := os.Hostname()
 	deviceparts := strings.Split(event.ID, "-")
 
 	return ei.Event{
-		Hostname:  hostname,
+		Hostname:  event.ID,
 		Timestamp: event.Timestamp,
 		Event: ei.EventInfo{
 			Type:         ei.HEARTBEAT,
@@ -161,11 +161,11 @@ func translateChromium(jsonString string) (ei.Event, *nerr.E) {
 		return ei.Event{}, nerr.Create("Could not translate event! Error unmarshaling.", "UnrecognizedJSON")
 	}
 
-	hostname, _ := os.Hostname()
+	//hostname, _ := os.Hostname()
 	deviceparts := strings.Split(event.ID, "-")
 
 	return ei.Event{
-		Hostname:  hostname,
+		Hostname:  event.ID,
 		Timestamp: event.Timestamp,
 		Event: ei.EventInfo{
 			Type:           ei.HEARTBEAT,
