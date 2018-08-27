@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	ei "github.com/byuoitav/common/events"
 	"github.com/byuoitav/common/log"
@@ -74,9 +75,14 @@ func translateChange(jsonString string) (ei.Event, *nerr.E) {
 
 	hostname, _ := os.Hostname()
 
+	t, err := time.Parse("2006-01-02T15:04:05.999999", event.Timestamp)
+	if err != nil {
+		return ei.Event{}, nerr.Translate(err).Addf("Couldn't parse beacon status timestamp")
+	}
+
 	return ei.Event{
 		Hostname:  hostname,
-		Timestamp: event.Timestamp,
+		Timestamp: t,
 		Event: ei.EventInfo{
 			Type:           ei.HEARTBEAT,
 			Requestor:      "",
@@ -123,10 +129,14 @@ func translateBeaconStatus(jsonString string) (ei.Event, *nerr.E) {
 
 	//hostname, _ := os.Hostname()
 	deviceparts := strings.Split(event.ID, "-")
+	t, err := time.Parse("2006-01-02T15:04:05.999999", event.Timestamp)
+	if err != nil {
+		return ei.Event{}, nerr.Translate(err).Addf("Couldn't parse beacon status timestamp")
+	}
 
 	return ei.Event{
 		Hostname:  event.ID,
-		Timestamp: event.Timestamp,
+		Timestamp: t,
 		Event: ei.EventInfo{
 			Type:         ei.HEARTBEAT,
 			Requestor:    "",
@@ -164,9 +174,14 @@ func translateChromium(jsonString string) (ei.Event, *nerr.E) {
 	//hostname, _ := os.Hostname()
 	deviceparts := strings.Split(event.ID, "-")
 
+	t, err := time.Parse("2006-01-02T15:04:05.999999", event.Timestamp)
+	if err != nil {
+		return ei.Event{}, nerr.Translate(err).Addf("Couldn't parse beacon status timestamp")
+	}
+
 	return ei.Event{
 		Hostname:  event.ID,
-		Timestamp: event.Timestamp,
+		Timestamp: t,
 		Event: ei.EventInfo{
 			Type:           ei.HEARTBEAT,
 			Requestor:      "",
