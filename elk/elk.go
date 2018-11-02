@@ -29,6 +29,7 @@ func Publish(events chan string, done chan bool) {
 	log.L.Debugf("Publishing to ELK...")
 
 	address := os.Getenv("ELASTIC_API_EVENTS")
+
 	log.L.Debugf("Writing events to: %s", address)
 
 	for {
